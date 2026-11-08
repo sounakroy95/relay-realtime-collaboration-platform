@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Relay — Browser Client</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-2: #1f232c;
+        --border: #2a2f3a;
+        --text: #e6e9ef;
+        --muted: #8b93a3;
+        --accent: #4f8cff;
+        --ok: #35c46b;
+        --warn: #f2b33d;
+        --bad: #ef5a5a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #1b2130 0%, var(--bg) 55%);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        padding: 24px;
+      }
+
+      .app {
+        width: 100%;
+        max-width: 720px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-2);
+      }
+
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+
+      .brand span {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* Connection status indicator */
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+
+      .status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .status[data-state="connecting"] .dot {
+        background: var(--warn);
+        box-shadow: 0 0 8px var(--warn);
+      }
+
+      .status[data-state="connected"] .dot {
+        background: var(--ok);
+        box-shadow: 0 0 8px var(--ok);
+      }
+
+      .status[data-state="disconnected"] .dot {
+        background: var(--bad);
+      }
+
+      .status[data-state="connected"] .label {
+        color: var(--ok);
+      }
+
+      .status[data-state="connecting"] .label {
+        color: var(--warn);
+      }
+
+      .status[data-state="disconnected"] .label {
+        color: var(--bad);
+      }
+
+      /* Messages */
+      .messages {
+        height: 360px;
+        overflow-y: auto;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        scroll-behavior: smooth;
+      }
+
+      .messages:empty::before {
+        content: "No messages yet. Connect and say hello.";
+        color: var(--muted);
+        font-size: 14px;
+        margin: auto;
+      }
+
+      .message {
+        max-width: 78%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 14px;
+        line-height: 1.45;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+      }
+
+      .message .meta {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        opacity: 0.7;
+      }
+
+      .message.outgoing {
+        align-self: flex-end;
+        background: var(--accent);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .message.incoming {
+        align-self: flex-start;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+      }
+
+      .message.system {
+        align-self: center;
+        max-width: 100%;
+        background: transparent;
+        border: 1px dashed var(--border);
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      /* Controls */
+      .controls {
+        display: flex;
+        gap: 10px;
+        padding: 14px 20px;
+        border-top: 1px solid var(--border);
+        background: var(--panel-2);
+      }
+
+      button {
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        transition: transform 0.05s ease, background 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      button:hover:not(:disabled) {
+        background: #232834;
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      #connectBtn {
+        border-color: rgba(53, 196, 107, 0.4);
+        color: var(--ok);
+      }
+
+      #disconnectBtn {
+        border-color: rgba(239, 90, 90, 0.35);
+        color: var(--bad);
+      }
+
+      .composer {
+        display: flex;
+        gap: 10px;
+        padding: 14px 20px 20px;
+        background: var(--panel-2);
+        border-top: 1px solid var(--border);
+      }
+
+      #messageInput {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 14px;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 11px 14px;
+        outline: none;
+        transition: border-color 0.15s ease;
+      }
+
+      #messageInput::placeholder {
+        color: var(--muted);
+      }
+
+      #messageInput:focus {
+        border-color: var(--accent);
+      }
+
+      #messageInput:disabled {
+        opacity: 0.6;
+      }
+
+      #sendBtn {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      #sendBtn:hover:not(:disabled) {
+        background: #3f7cf0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="brand">
+          <h1>Relay</h1>
+          <span>Browser client</span>
+        </div>
+        <div id="status" class="status" data-state="disconnected">
+          <span class="dot"></span>
+          <span id="statusLabel" class="label">Disconnected</span>
+        </div>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite"></section>
+
+      <div class="controls">
+        <button id="connectBtn" type="button">Connect</button>
+        <button id="disconnectBtn" type="button" disabled>Disconnect</button>
+      </div>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <input
+          id="messageInput"
+          type="text"
+          placeholder="Type a message…"
+          aria-label="Message"
+          disabled
+        />
+        <button id="sendBtn" type="submit" disabled>Send</button>
+      </form>
+    </main>
+
+    <script>
+      const WS_URL = "ws://localhost:3000";
+
+      const statusEl = document.getElementById("status");
+      const statusLabel = document.getElementById("statusLabel");
+      const messagesEl = document.getElementById("messages");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const composer = document.getElementById("composer");
+      const messageInput = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+
+      /** @type {WebSocket | null} */
+      let socket = null;
+
+      function setStatus(state, label) {
+        statusEl.dataset.state = state;
+        statusLabel.textContent = label;
+
+        const connected = state === "connected";
+        connectBtn.disabled = connected || state === "connecting";
+        disconnectBtn.disabled = !connected && state !== "connecting";
+        messageInput.disabled = !connected;
+        sendBtn.disabled = !connected;
+
+        if (connected) {
+          messageInput.focus();
+        }
+      }
+
+      function addMessage(text, kind) {
+        const el = document.createElement("div");
+        el.className = `message ${kind}`;
+
+        if (kind !== "system") {
+          const meta = document.createElement("span");
+          meta.className = "meta";
+          meta.textContent =
+            kind === "outgoing" ? "You" : "Server";
+          el.appendChild(meta);
+        }
+
+        el.appendChild(document.createTextNode(text));
+        messagesEl.appendChild(el);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      // Parse frames from the server. The server sends JSON, but fall back to
+      // raw text so the client keeps working if the format changes.
+      function extractMessage(raw) {
+        try {
+          const data = JSON.parse(raw);
+          if (data && typeof data.message === "string") {
+            return data.message;
+          }
+          return typeof data === "string" ? data : JSON.stringify(data);
+        } catch {
+          return raw;
+        }
+      }
+
+      function connect() {
+        if (socket && (socket.readyState === WebSocket.OPEN ||
+            socket.readyState === WebSocket.CONNECTING)) {
+          return;
+        }
+
+        setStatus("connecting", "Connecting");
+        addMessage(`Connecting to ${WS_URL}…`, "system");
+
+        socket = new WebSocket(WS_URL);
+
+        socket.addEventListener("open", () => {
+          setStatus("connected", "Connected");
+          addMessage("Connected to server.", "system");
+        });
+
+        socket.addEventListener("message", (event) => {
+          addMessage(extractMessage(event.data), "incoming");
+        });
+
+        socket.addEventListener("close", () => {
+          setStatus("disconnected", "Disconnected");
+          addMessage("Connection closed.", "system");
+          socket = null;
+        });
+
+        socket.addEventListener("error", () => {
+          addMessage("Connection error. Is the server running?", "system");
+        });
+      }
+
+      function disconnect() {
+        if (!socket) {
+          return;
+        }
+        socket.close();
+      }
+
+      function sendMessage(text) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          addMessage("Not connected.", "system");
+          return;
+        }
+        socket.send(text);
+        addMessage(text, "outgoing");
+      }
+
+      connectBtn.addEventListener("click", connect);
+      disconnectBtn.addEventListener("click", disconnect);
+
+      composer.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = messageInput.value.trim();
+        if (!text) {
+          return;
+        }
+        sendMessage(text);
+        messageInput.value = "";
+        messageInput.focus();
+      });
+
+      setStatus("disconnected", "Disconnected");
+    </script>
+  </body>
+</html>
